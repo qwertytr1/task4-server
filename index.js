@@ -15,10 +15,10 @@ app.use(cors({
 }));
 
 const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  host: "bt8onh8k8r2wwatrouru-mysql.services.clever-cloud.com",
+  user: "unrznscdq4oweozs",
+  password: "EG50Akg2qeBtk0avHile",
+  database: "bt8onh8k8r2wwatrouru",
   waitForConnections: true,
   connectionLimit: 5, // Максимальное количество соединений в пуле
   queueLimit: 0,
