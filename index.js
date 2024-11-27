@@ -20,6 +20,9 @@ const db = mysql.createConnection({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 5, // Максимальное количество соединений в пуле
+  queueLimit: 0,
 });
 const PORT = process.env.PORT || 8081;
 const SECRET_KEY = process.env.SECRET_KEY;
