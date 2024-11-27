@@ -9,7 +9,7 @@ dotenv.config(); // Загрузка переменных окружения и�
 const app = express();
 app.use(express.json());
 app.use(cors({
-  origin: 'https://task4-client-1.vercel.app', // Укажите ваш фронтенд-домен
+  origin: 'https://task4-client-cjwx.vercel.app', // Укажите ваш фронтенд-домен
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true // Если используются cookies или авторизация
 }));
