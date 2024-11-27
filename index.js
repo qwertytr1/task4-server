@@ -22,6 +22,7 @@ const db = mysql.createConnection({
   waitForConnections: true,
   connectionLimit: 5, // Максимальное количество соединений в пуле
   queueLimit: 0,
+  connectTimeout: 10000
 });
 const PORT = process.env.PORT || 8081;
 const SECRET_KEY = "123";
