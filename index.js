@@ -8,7 +8,6 @@ dotenv.config(); // Загрузка переменных окружения и�
 
 const app = express();
 app.use(express.json());
-console.log("SECRET_KEY is:", process.env.SECRET_KEY);
 app.use(cors({
   origin: 'https://task4-client-1.vercel.app', // Укажите ваш фронтенд-домен
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -25,7 +24,7 @@ const db = mysql.createConnection({
   queueLimit: 0,
 });
 const PORT = process.env.PORT || 8081;
-const SECRET_KEY = process.env.SECRET_KEY;
+const SECRET_KEY = "123";
 
 const updateLastLogin = (userId) => {
   return new Promise((resolve, reject) => {
