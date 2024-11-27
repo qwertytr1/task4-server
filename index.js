@@ -186,7 +186,7 @@ app.get('/users', authenticateToken, (req, res) => {
  });
 
   app.post("/users/delete", authenticateToken, (req, res) => {
-    const { ids } = req.body;а
+    const { ids } = req.body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ message: "Invalid request. 'ids' must be a non-empty array." });
