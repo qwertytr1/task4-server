@@ -60,6 +60,9 @@ app.post("/register", (req, res) => {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
+  // Генерация JWT токена для нового пользователя
+  const token = jwt.sign({ username, email }, SECRET_KEY, { expiresIn: "7d" });
+
   const sql = "INSERT INTO users (`username`, `email`, `password`, `status`, `token`) VALUES (?)";
   const values = [username, email, password, "active", token];
 
@@ -71,7 +74,7 @@ app.post("/register", (req, res) => {
       console.error(err); // Вывод ошибки в консоль
       return res.status(500).json({ message: "Database error" });
     }
-    return res.status(200).json({ message: "User registered successfully", token });
+    return res.status(201).json({ message: "User registered successfully", token });
   });
 });
 
