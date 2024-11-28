@@ -1,86 +1,228 @@
-import express from "express";
-import mysql from "mysql2/promise";
-import cors from "cors";
-import jwt from "jsonwebtoken";
+  import express from "express";
+  import mysql from "mysql2";
+  import cors from "cors";
+  import jwt from "jsonwebtoken";
 
-const app = express();
-const PORT = process.env.PORT || 8081;
-const SECRET_KEY = process.env.SECRET_KEY || "123";
+  const app = express();
+  app.use(express.json());
+  app.use(cors({
+    origin: 'https://task4-client-cjwx.vercel.app',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }));
 
-app.use(express.json());
-app.use(cors({ origin: "https://task4-client-cjwx.vercel.app", methods: ["GET", "POST", "PUT", "DELETE"], allowedHeaders: ["Content-Type", "Authorization"] }));
+  const db = mysql.createConnection({
+    host: "bt8onh8k8r2wwatrouru-mysql.services.clever-cloud.com",
+    user: "unrznscdq4oweozs",
+    password: "EG50Akg2qeBtk0avHile",
+    database: "bt8onh8k8r2wwatrouru",
+    waitForConnections: true,
+    connectionLimit: 5,
+    queueLimit: 0,
+    connectTimeout: 10000
+  });
+  const PORT = process.env.PORT || 8081;
+  const SECRET_KEY = "123";
 
-const db = mysql.createPool({
-  host: process.env.DB_HOST || "bt8onh8k8r2wwatrouru-mysql.services.clever-cloud.com",
-  user: process.env.DB_USER || "unrznscdq4oweozs",
-  password: process.env.DB_PASSWORD || "EG50Akg2qeBtk0avHile",
-  database: process.env.DB_NAME || "bt8onh8k8r2wwatrouru",
-  waitForConnections: true,
-  connectionLimit: 10,
-});
+  const updateLastLogin = (userId) => {
+    return new Promise((resolve, reject) => {
+      const sql = "UPDATE users SET last_login = NOW() WHERE id = ?";
+      db.query(sql, [userId], (err) => {
+        if (err) {
+          console.error("Error updating last login:", err);
+          return reject(err);
+        }
+        resolve();
+      });
+    });
+  };
 
-const USER_STATUSES = { ACTIVE: "active", BLOCKED: "blocked" };
+  const authenticateToken = (req, res, next) => {
+    const token = req.headers["authorization"]?.split(" ")[1]; // Извлекаем токен из заголовка Authorization
+    if (!token) {
+      return res.status(401).json({ Status: "Error", message: "Token is required" });
+    }
 
-app.post("/register", async (req, res) => {
-  const { username, email, password } = req.body;
-  if (!email || !username || !password) return res.status(400).json({ message: "Missing required fields" });
+    jwt.verify(token, SECRET_KEY, (err, user) => {
+      if (err) {
+        return res.status(403).json({ Status: "Error", message: "Invalid token" });
+      }
 
-  const token = jwt.sign({ username, email }, SECRET_KEY, { expiresIn: "7d" });
-  const sql = "INSERT INTO users (`username`, `email`, `password`, `status`, `token`) VALUES (?)";
-  const values = [username, email, password, USER_STATUSES.ACTIVE, token];
+      req.user = user; // Сохраняем информацию о пользователе в запросе
+      next();
+    });
+  };
 
-  try {
-    await db.query(sql, [values]);
-    res.status(201).json({ message: "User registered successfully", token });
-  } catch (err) {
-    if (err.code === "ER_DUP_ENTRY") res.status(409).json({ message: "Email is already in use." });
-    else res.status(500).json({ message: "Internal server error" });
-  }
-});
+  app.post("/register", (req, res) => {
+    const { username, email, password } = req.body;
 
-app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ message: "Email and password are required" });
+    if (!email || !username || !password) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
 
-  const [users] = await db.query("SELECT * FROM users WHERE email = ? AND password = ?", [email, password]);
-  if (!users.length) return res.status(401).json({ message: "Invalid email or password" });
+    // Генерация JWT токена для нового пользователя
+    const token = jwt.sign({ username, email }, SECRET_KEY, { expiresIn: "7d" });
 
-  const user = users[0];
-  if (user.status === USER_STATUSES.BLOCKED) return res.status(403).json({ message: "Account is blocked" });
+    const sql = "INSERT INTO users (`username`, `email`, `password`, `status`, `token`) VALUES (?)";
+    const values = [username, email, password, "active", token];
 
-  const token = jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: "7d" });
-  await db.query("UPDATE users SET last_login = NOW() WHERE id = ?", [user.id]);
+    db.query(sql, [values], (err) => {
+      if (err) {
+        if (err.code === "ER_DUP_ENTRY") {
+          return res.status(409).json({ message: "Email is already in use." });
+        }
+        console.error(err); // Вывод ошибки в консоль
+        return res.status(500).json({ message: "Database error" });
+      }
+      return res.status(201).json({ message: "User registered successfully", token });
+    });
+  });
 
-  res.status(200).json({ message: "Login successful", token, user: { id: user.id, email: user.email, status: user.status } });
-});
+  app.post("/login", (req, res) => {
+    const { email, password } = req.body;
 
-app.get("/users", async (req, res) => {
-  const [users] = await db.query("SELECT id, username AS name, email, last_login AS lastLogin, status FROM users ORDER BY last_login DESC");
-  res.json(users);
-});
+    const sql = "SELECT * FROM users WHERE email = ? AND password = ?";
+    db.query(sql, [email, password], async (err, result) => {
+      if (err) {
+        console.error("Database error:", err);
+        return res.status(500).json({ Status: "Error", message: "Internal server error" });
+      }
 
-app.post("/users/block", async (req, res) => {
-  const { emails } = req.body;
-  if (!emails?.length) return res.status(400).json({ message: "'emails' must be a non-empty array." });
+      if (result.length === 0) {
+        return res.status(401).json({ Status: "Error", message: "Invalid email or password" });
+      }
 
-  await db.query("UPDATE users SET status = ? WHERE email IN (?)", [USER_STATUSES.BLOCKED, emails]);
-  res.status(200).json({ message: "Users blocked successfully." });
-});
+      const user = result[0];
 
-app.post("/users/unblock", async (req, res) => {
-  const { ids } = req.body;
-  if (!ids?.length) return res.status(400).json({ message: "'ids' must be a non-empty array." });
+      // Если аккаунт заблокирован
+      if (user.status === "blocked") {
+        return res.status(403).json({ Status: "Error", message: "Account is blocked" });
+      }
 
-  await db.query("UPDATE users SET status = ? WHERE id IN (?)", [USER_STATUSES.ACTIVE, ids]);
-  res.status(200).json({ message: "Users unblocked successfully." });
-});
+      // Генерация JWT токена
+      const token = jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: "7d" });
 
-app.post("/users/delete", async (req, res) => {
-  const { ids } = req.body;
-  if (!ids?.length) return res.status(400).json({ message: "'ids' must be a non-empty array." });
+      try {
+        // Обновление времени последнего входа
+        await updateLastLogin(user.id);
+      } catch (updateError) {
+        console.error("Failed to update last login time:", updateError);
+        return res.status(500).json({ Status: "Error", message: "Failed to update last login time" });
+      }
 
-  await db.query("DELETE FROM users WHERE id IN (?)", [ids]);
-  res.status(200).json({ message: "Users deleted successfully." });
-});
+      res.status(200).json({
+        Status: "Success",
+        token,
+        User: {
+          id: user.id,
+          email: user.email,
+          status: user.status,
+        },
+      });
+    });
+  });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  app.post("/users/block", authenticateToken, (req, res) => {
+    const { emails } = req.body; // Получаем 'emails' из тела запроса
+
+    if (!Array.isArray(emails) || emails.length === 0) {
+      return res.status(400).json({ message: "Invalid request. 'emails' must be a non-empty array." });
+    }
+
+    const userEmail = req.user.email; // Получаем email текущего пользователя
+
+    // Проверяем, не пытается ли пользователь заблокировать свой собственный аккаунт
+
+    const blockSql = "UPDATE users SET status = 'blocked' WHERE email IN (?)";
+    db.query(blockSql, [emails], (err, result) => {
+      if (err) {
+        console.error("Database error:", err);
+        return res.status(500).json({ message: "Internal server error." });
+      }
+
+      const affectedRows = result.affectedRows;
+
+      const fetchAllUsersSql = "SELECT id, username AS name, email, last_login AS lastLogin, status FROM users";
+      db.query(fetchAllUsersSql, (err, allUsersResult) => {
+        if (err) {
+          console.error("Error fetching updated users:", err);
+          return res.status(500).json({ message: "Error fetching updated user list." });
+        }
+
+        res.status(200).json({ message: `${affectedRows} users blocked successfully.`, users: allUsersResult });
+      });
+    });
+  });
+
+  app.get('/users', authenticateToken, (req, res) => {
+    const sql = "SELECT id, username AS name, email, last_login AS lastLogin, status, token FROM users ORDER BY last_login DESC";
+    db.query(sql, (err, result) => {
+      if (err) {
+        console.error("Error fetching users:", err);
+        return res.status(500).send("Internal server error");
+      }
+      res.json(result);
+    });
+  });
+  app.post("/users/unblock", (req, res) => {
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Invalid request. 'ids' must be a non-empty array." });
+      }
+
+      const sql = `UPDATE users SET status = 'active' WHERE id IN (?)`;
+
+      db.query(sql, [ids], (err, result) => {
+        if (err) {
+          console.error("Error unblocking users:", err);
+          return res.status(500).json({ message: "Internal server error" });
+        }
+
+        res.status(200).json({ message: `${result.affectedRows} users unblocked successfully.` });
+      });
+  });
+
+    app.post("/users/delete", authenticateToken, (req, res) => {
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Invalid request. 'ids' must be a non-empty array." });
+      }
+
+      const deleteSql = "DELETE FROM users WHERE id IN (?)";
+      db.query(deleteSql, [ids], (err, result) => {
+        if (err) {
+          console.error("Database error:", err);
+          return res.status(500).json({ message: "Internal server error." });
+        }
+
+        const affectedRows = result.affectedRows;
+
+        if (affectedRows > 0) {
+          const resetAutoIncrementSql = "ALTER TABLE users AUTO_INCREMENT = 1";
+          db.query(resetAutoIncrementSql, (err) => {
+            if (err) {
+              console.error("Error resetting auto-increment:", err);
+            }
+          });
+        }
+
+        const fetchAllUsersSql = "SELECT id, username AS name, email, last_login AS lastLogin, status FROM users";
+        db.query(fetchAllUsersSql, (err, allUsersResult) => {
+          if (err) {
+            console.error("Error fetching updated users:", err);
+            return res.status(500).json({ message: "Error fetching updated user list." });
+          }
+
+          res.status(200).json({
+            message: `${affectedRows} users deleted successfully.`,
+            users: allUsersResult,
+          });
+        });
+      });
+    });
+
+  app.listen(PORT, () => {
+    console.log("Server is running on port 8081");
+  });
