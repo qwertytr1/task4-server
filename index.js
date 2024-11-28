@@ -2,16 +2,13 @@ import express from "express";
 import mysql from "mysql2";
 import cors from "cors";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-
-dotenv.config(); // Загрузка переменных окружения из .env
 
 const app = express();
 app.use(express.json());
 app.use(cors({
-  origin: 'https://task4-client-cjwx.vercel.app', // Укажите ваш фронтенд-домен
+  origin: 'https://task4-client-cjwx.vercel.app',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true // Если используются cookies или авторизация
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 const db = mysql.createConnection({
@@ -20,7 +17,7 @@ const db = mysql.createConnection({
   password: "EG50Akg2qeBtk0avHile",
   database: "bt8onh8k8r2wwatrouru",
   waitForConnections: true,
-  connectionLimit: 5, // Максимальное количество соединений в пуле
+  connectionLimit: 5,
   queueLimit: 0,
   connectTimeout: 10000
 });
