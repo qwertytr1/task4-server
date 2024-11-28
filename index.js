@@ -100,8 +100,15 @@ app.post("/register", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
-  const sql = "SELECT * FROM users WHERE email = ? AND password = ?";
+  if (!email || !password) {
+    return res.status(400).json({ message: "Email and password are required" });
+  }
+
   try {
+    console.log("Login attempt:", { email, password });
+
+    // Поиск пользователя
+    const sql = "SELECT * FROM users WHERE email = ? AND password = ?";
     const users = await executeQuery(sql, [email, password]);
 
     if (users.length === 0) {
@@ -110,11 +117,15 @@ app.post("/login", async (req, res) => {
 
     const user = users[0];
 
+    // Проверяем, заблокирован ли пользователь
     if (user.status === USER_STATUSES.BLOCKED) {
       return res.status(403).json({ message: "Account is blocked" });
     }
 
+    // Генерация токена
     const token = jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: "7d" });
+
+    // Обновление времени последнего входа
     await updateLastLogin(user.id);
 
     res.status(200).json({
